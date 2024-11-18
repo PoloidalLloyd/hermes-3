@@ -220,14 +220,14 @@ void Reservoir::outputVars(Options& state) {
   
   if (diagnose) {
 
-    // // Area
-    // ///////////////////////////
+    // Area
+    ///////////////////////////
 
-    // set_with_attrs(state[std::string("area_") + name], area,
-    //       {{"units", "m^2"},
-    //       {"standard_name", "area"},
-    //       {"long_name", name + std::string(" area")},
-    //       {"source", "reservoir"}});
+    set_with_attrs(state[std::string("area_") + name], area,
+          {{"units", "m^2"},
+          {"standard_name", "area"},
+          {"long_name", name + std::string(" area")},
+          {"source", "reservoir"}});
 
     // Main sol reservoir
     ///////////////////////////
