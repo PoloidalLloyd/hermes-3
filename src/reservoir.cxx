@@ -60,8 +60,13 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
           .doc("Parallel position of border between upstream-SOL and divertor-SOL reservoirs [m]")
           .withDefault<BoutReal>(xpoint_position);
 
-  // Assume area is 1 for now
-  area = 1;
+  // Get the area of the radial reservoir_region
+  area = options["area"]
+      .doc("Area of radial regions. Specify as an analytical function.")
+      .withDefault(0.0);
+
+
+  // area = 1; // This is constant, and wrong! 
 
 
   // Get lpar
@@ -214,6 +219,15 @@ void Reservoir::outputVars(Options& state) {
   // Always save reservoir location (time independent)
   
   if (diagnose) {
+
+    // // Area
+    // ///////////////////////////
+
+    // set_with_attrs(state[std::string("area_") + name], area,
+    //       {{"units", "m^2"},
+    //       {"standard_name", "area"},
+    //       {"long_name", name + std::string(" area")},
+    //       {"source", "reservoir"}});
 
     // Main sol reservoir
     ///////////////////////////
