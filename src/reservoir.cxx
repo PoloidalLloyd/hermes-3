@@ -63,7 +63,7 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
   // Get the area of the radial reservoir_region
   area = options["area"]
       .doc("Area of radial regions. Specify as an analytical function.")
-      .withDefault(0.0);
+      .withDefault<Field3D>(0.0);
 
 
   // area = 1; // This is constant, and wrong! 
