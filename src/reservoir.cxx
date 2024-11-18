@@ -65,9 +65,10 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
       .doc("Area of radial regions. Specify as an analytical function.")
       .withDefault<Field3D>(0.0);
 
-
   // area = 1; // This is constant, and wrong! 
-
+  const auto& units = alloptions["units"];
+  BoutReal Anorm = SQ(get<BoutReal>(units["meters"]));
+  area /= Anorm;
 
   // Get lpar
   const int MYPE = BoutComm::rank();   // Current rank
@@ -78,6 +79,10 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
   lpar = 0;
   BoutReal offset = 0;   // Offset to ensure ylow domain boundary starts at 0
   auto dy = coord->dy;
+  auto j = coord->j
+
+  volume = area * dy;  // Volume of each cell
+
 
   lpar(0,0,0) = 0.5 * dy(0,0,0);
   for (int id = 0; id <= NYPE-1; ++id) {   // Iterate through each proc
@@ -158,9 +163,9 @@ void Reservoir::transform(Options& state) {
       BoutReal Prate  = P[i]  / N[i] * Nrate;
       BoutReal NVrate = NV[i] / N[i] * Nrate;
 
-      density_source_main_sol[i]  += Nrate;
-      energy_source_main_sol[i]   += (3. / 2) * Prate;
-      momentum_source_main_sol[i] += NVrate;
+      density_source_main_sol[i]  += Nrate / volume ; // j*dy to get volume
+      energy_source_main_sol[i]   += (3. / 2) * Prate / volume;
+      momentum_source_main_sol[i] += NVrate / volume;
       location_main_sol[i] = 1;
     }
 
@@ -175,9 +180,9 @@ void Reservoir::transform(Options& state) {
       BoutReal Prate  = P[i]  / N[i] * Nrate;
       BoutReal NVrate = NV[i] / N[i] * Nrate;
 
-      density_source_div_sol[i]  += Nrate;
-      energy_source_div_sol[i]   += (3. / 2) * Prate;
-      momentum_source_div_sol[i] += NVrate;
+      density_source_div_sol[i]  += Nrate/volume;
+      energy_source_div_sol[i]   += (3. / 2) * Prate/volume;
+      momentum_source_div_sol[i] += NVrate/volume;
       location_div_sol[i] = 1;
     }
 
@@ -192,9 +197,9 @@ void Reservoir::transform(Options& state) {
       BoutReal Prate  = P[i]  / N[i] * Nrate;
       BoutReal NVrate = NV[i] / N[i] * Nrate;
 
-      density_source_div_pfr[i]  += Nrate;
-      energy_source_div_pfr[i]   += (3. / 2) * Prate;
-      momentum_source_div_pfr[i] += NVrate;
+      density_source_div_pfr[i]  += Nrate / volume;
+      energy_source_div_pfr[i]   += (3. / 2) * Prate / volume;
+      momentum_source_div_pfr[i] += NVrate / volume;
       location_div_pfr[i] = 1;
     }
     

@@ -59,6 +59,7 @@ private:
 
   Field3D lpar;   // Parallel connection length, 0 at midplane edge
   Field3D area;   // Cross-sectional area in direction of cross-field transport
+  Field3D volume;
 };
 
 namespace {
