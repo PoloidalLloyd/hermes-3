@@ -66,7 +66,7 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
       .withDefault<Field3D>(0.0);
 
   // area = 1; // This is constant, and wrong! 
-  const auto& units = alloptions["units"];
+ 
   BoutReal Anorm = SQ(get<BoutReal>(units["meters"]));
   area /= Anorm;
 
@@ -79,9 +79,9 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
   lpar = 0;
   BoutReal offset = 0;   // Offset to ensure ylow domain boundary starts at 0
   auto dy = coord->dy;
-  auto j = coord->j
+  auto J = coord->J;
 
-  volume = area * dy;  // Volume of each cell
+  volume = J * dy;  // Volume of each cell
 
 
   lpar(0,0,0) = 0.5 * dy(0,0,0);
@@ -163,9 +163,9 @@ void Reservoir::transform(Options& state) {
       BoutReal Prate  = P[i]  / N[i] * Nrate;
       BoutReal NVrate = NV[i] / N[i] * Nrate;
 
-      density_source_main_sol[i]  += Nrate / volume ; // j*dy to get volume
-      energy_source_main_sol[i]   += (3. / 2) * Prate / volume;
-      momentum_source_main_sol[i] += NVrate / volume;
+      density_source_main_sol[i]  += Nrate / volume[i] ; // j*dy to get volume
+      energy_source_main_sol[i]   += (3. / 2) * Prate / volume[i];
+      momentum_source_main_sol[i] += NVrate / volume[i];
       location_main_sol[i] = 1;
     }
 
@@ -180,9 +180,9 @@ void Reservoir::transform(Options& state) {
       BoutReal Prate  = P[i]  / N[i] * Nrate;
       BoutReal NVrate = NV[i] / N[i] * Nrate;
 
-      density_source_div_sol[i]  += Nrate/volume;
-      energy_source_div_sol[i]   += (3. / 2) * Prate/volume;
-      momentum_source_div_sol[i] += NVrate/volume;
+      density_source_div_sol[i]  += Nrate/ volume[i];
+      energy_source_div_sol[i]   += (3. / 2) * Prate/ volume[i];
+      momentum_source_div_sol[i] += NVrate/ volume[i];
       location_div_sol[i] = 1;
     }
 
@@ -197,9 +197,9 @@ void Reservoir::transform(Options& state) {
       BoutReal Prate  = P[i]  / N[i] * Nrate;
       BoutReal NVrate = NV[i] / N[i] * Nrate;
 
-      density_source_div_pfr[i]  += Nrate / volume;
-      energy_source_div_pfr[i]   += (3. / 2) * Prate / volume;
-      momentum_source_div_pfr[i] += NVrate / volume;
+      density_source_div_pfr[i]  += Nrate / volume[i];
+      energy_source_div_pfr[i]   += (3. / 2) * Prate / volume[i];
+      momentum_source_div_pfr[i] += NVrate / volume[i];
       location_div_pfr[i] = 1;
     }
     
@@ -230,6 +230,7 @@ void Reservoir::outputVars(Options& state) {
 
     set_with_attrs(state[std::string("area_") + name], area,
           {{"units", "m^2"},
+          {"conversion", SQ(get<BoutReal>(state["units"]["meters"]))},
           {"standard_name", "area"},
           {"long_name", name + std::string(" area")},
           {"source", "reservoir"}});
