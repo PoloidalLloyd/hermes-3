@@ -219,6 +219,7 @@ void Reservoir::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
+  auto Anorm = SQ(get<BoutReal>(units["meters"]))
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   // Always save reservoir location (time independent)
@@ -230,7 +231,7 @@ void Reservoir::outputVars(Options& state) {
 
     set_with_attrs(state[std::string("area_") + name], area,
           {{"units", "m^2"},
-          {"conversion", SQ(get<BoutReal>(state["units"]["meters"]))},
+          {"conversion", Anorm},
           {"standard_name", "area"},
           {"long_name", name + std::string(" area")},
           {"source", "reservoir"}});
