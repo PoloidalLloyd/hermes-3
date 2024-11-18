@@ -219,7 +219,7 @@ void Reservoir::outputVars(Options& state) {
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
-  auto Anorm = SQ(get<BoutReal>(units["meters"]))
+  auto Anorm = SQ(get<BoutReal>(units["meters"]));
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   // Always save reservoir location (time independent)
