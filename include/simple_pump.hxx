@@ -35,7 +35,7 @@ struct SimplePump : public Component {
 
         Field3D species_density = getNoBoundary<Field3D>(state["species"][name]["density"]);
 
-        pumping_sink = (sink_shape * species_density) * (-1.0 / residence_time);
+        pumping_sink = - floor(-1*((sink_shape * species_density) * (-1.0 / residence_time)), 0.0);
 
         add(state["species"][name]["density_source"], pumping_sink);
 
