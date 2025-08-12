@@ -607,7 +607,16 @@ void EvolvePressure::outputVars(Options& state) {
                       {"long_name", name + " heat conduction coefficient"},
                       {"species", name},
                       {"source", "evolve_pressure"}});
+
+      set_with_attrs(state[std::string("kappa_par_TEST_BUILD") + name], kappa_par,
+                     {{"time_dimension", "t"},
+                      {"units", "W / m / eV"},
+                      {"conversion", (Pnorm * Omega_ci * SQ(rho_s0) )/ Tnorm},
+                      {"long_name", name + " heat conduction coefficient"},
+                      {"species", name},
+                      {"source", "evolve_pressure"}});
                       
+
       set_with_attrs(state[std::string("K") + name + std::string("_cond")], nu,
                      {{"time_dimension", "t"},
                       {"units", "s^-1"},
