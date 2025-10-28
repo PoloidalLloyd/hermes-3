@@ -16,8 +16,8 @@ nout = 100
 # Normalisation: see BOUT++ docs
 timestep = 95788 * 0.05   # 95788 = 1 milisecond
 
-restart = true
-append = true
+;restart = true
+;append = true
 
 
 MXG = 0  # No guard cells in X
