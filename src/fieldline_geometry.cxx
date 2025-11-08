@@ -62,32 +62,15 @@ Field3D calculate_Lpar() {
  * It calculates and stores various geometric quantities such as the parallel length,
  * magnetic field components, flux expansion, and cell dimensions.
  */
-FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
-    Options& geo_options = options["fieldline_geometry"];  // Get options specific to fieldline_geometry
-    const Options& mesh_options = options["mesh"];        // Get mesh options
-    const Options& units = options["units"];              // Get unit options
-    BoutReal Lnorm = get<BoutReal>(units["meters"]);     // Get the length normalization factor from the units options
-    BoutReal Bnorm = get<BoutReal>(units["Tesla"]);      // Get the magnetic field normalization factor from the units options
+ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
+    Options& geo_options = options["fieldline_geometry"];
+    const Options& mesh_options = options["mesh"];
+    const Options& units = options["units"];
+    BoutReal Lnorm = get<BoutReal>(units["meters"]);
+    BoutReal Bnorm = get<BoutReal>(units["Tesla"]);
 
-    Coordinates *coord = mesh->getCoordinates();          // Get the coordinates object from the mesh
-    lpar = calculate_Lpar() / Lnorm;                     // Calculate the parallel length and normalize it
-
-    // Get the string expressions for lambda_int, fieldline_radius and poloidal_magnetic_field from the options
-    std::string lambda_int_str = geo_options["lambda_int"]
-        .doc("Function for the integral heat flux width lambda_int = lambda_q + 1.64 S [m].")
-        .as<std::string>();
-    std::string fieldline_radius_str = geo_options["fieldline_radius"]
-        .doc("Function for the fieldline major radius R [m].")
-        .as<std::string>();
-    std::string poloidal_magnetic_field_str = geo_options["poloidal_magnetic_field"]
-        .doc("Function for the poloidal magnetic field strength Bpol [T].")
-        .as<std::string>();
-
-    // Create FieldGenerator objects for lambda_int, fieldline_radius and poloidal_magnetic_field
-    // These FieldGenerators will be used to evaluate the string expressions
-    FieldGeneratorPtr lambda_int_function = FieldFactory::get()->parse(lambda_int_str, &geo_options);
-    FieldGeneratorPtr poloidal_magnetic_field_function = FieldFactory::get()->parse(poloidal_magnetic_field_str, &geo_options);
-    FieldGeneratorPtr fieldline_radius_function = FieldFactory::get()->parse(fieldline_radius_str, &geo_options);
+    Coordinates *coord = mesh->getCoordinates();
+    lpar = calculate_Lpar() / Lnorm;
 
     // Allocate memory for the fields
     lambda_int.allocate();
@@ -97,85 +80,134 @@ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
     total_magnetic_field.allocate();
     pitch_angle.allocate();
 
-    // Generate the field data for lambda_int, fieldline_radius and poloidal_magnetic_field
-    // using the FieldGenerator objects and normalize the fields
-    BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
-        lambda_int[i] = lambda_int_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
-        fieldline_radius[i] = fieldline_radius_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
-        poloidal_magnetic_field[i] = poloidal_magnetic_field_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Bnorm;
+    // ========================================
+    // Read or generate poloidal_magnetic_field
+    // ========================================
+    if (mesh->sourceHasVar("poloidal_magnetic_field")) {
+        output.write("Reading poloidal_magnetic_field from grid file\n");
+        mesh->get(poloidal_magnetic_field, "poloidal_magnetic_field");
+        poloidal_magnetic_field /= Bnorm;
+    } else {
+        output.write("Generating poloidal_magnetic_field from expression\n");
+        std::string poloidal_magnetic_field_str = geo_options["poloidal_magnetic_field"]
+            .doc("Function for the poloidal magnetic field strength Bpol [T].")
+            .as<std::string>();
+        FieldGeneratorPtr poloidal_magnetic_field_function = 
+            FieldFactory::get()->parse(poloidal_magnetic_field_str, &geo_options);
+        
+        BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
+            poloidal_magnetic_field[i] = poloidal_magnetic_field_function->generate(
+                bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Bnorm;
+        }
     }
 
-    // Determine whether to compute Btor from R or use a provided function
+    // ========================================
+    // Read or generate fieldline_radius
+    // ========================================
+    if (mesh->sourceHasVar("fieldline_radius")) {
+        output.write("Reading fieldline_radius from grid file\n");
+        mesh->get(fieldline_radius, "fieldline_radius");
+        fieldline_radius /= Lnorm;
+    } else {
+        output.write("Generating fieldline_radius from expression\n");
+        std::string fieldline_radius_str = geo_options["fieldline_radius"]
+            .doc("Function for the fieldline major radius R [m].")
+            .as<std::string>();
+        FieldGeneratorPtr fieldline_radius_function = 
+            FieldFactory::get()->parse(fieldline_radius_str, &geo_options);
+        
+        BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
+            fieldline_radius[i] = fieldline_radius_function->generate(
+                bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
+        }
+    }
+
+    // ========================================
+    // Read or generate lambda_int
+    // ========================================
+    if (mesh->sourceHasVar("lambda_int")) {
+        output.write("Reading lambda_int from grid file\n");
+        mesh->get(lambda_int, "lambda_int");
+        lambda_int /= Lnorm;
+    } else {
+        output.write("Generating lambda_int from expression\n");
+        std::string lambda_int_str = geo_options["lambda_int"]
+            .doc("Function for the integral heat flux width lambda_int = lambda_q + 1.64 S [m].")
+            .as<std::string>();
+        FieldGeneratorPtr lambda_int_function = 
+            FieldFactory::get()->parse(lambda_int_str, &geo_options);
+        
+        BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
+            lambda_int[i] = lambda_int_function->generate(
+                bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
+        }
+    }
+
+    // ========================================
+    // Determine toroidal_magnetic_field
+    // ========================================
     bool compute_B_from_R = geo_options["compute_Btor_from_R"]
         .doc("Compute Btor = B_tor,upstream * R_upstream / R if true, or else use a function for toroidal_magnetic_field")
         .withDefault<bool>(true);
 
-    // If compute_B_from_R is true, compute Btor from R
     if (compute_B_from_R) {
-        geo_options["toroidal_magnetic_field"].setConditionallyUsed();  // Ensure toroidal_magnetic_field is not used
+        geo_options["toroidal_magnetic_field"].setConditionallyUsed();
         BoutReal upstream_toroidal_magnetic_field = geo_options["upstream_toroidal_magnetic_field"]
             .doc("Upstream toroidal magnetic field strength Btor,u [T]")
             .as<BoutReal>();
-        // Compute toroidal_magnetic_field using the formula: Btor = B_tor,upstream * R_upstream / R
-        toroidal_magnetic_field = (upstream_toroidal_magnetic_field / Bnorm) * fieldline_radius(0, mesh->ystart, 0) / fieldline_radius;
+        toroidal_magnetic_field = (upstream_toroidal_magnetic_field / Bnorm) * 
+                                  fieldline_radius(0, mesh->ystart, 0) / fieldline_radius;
     } else {
-        // Otherwise, use the provided function for toroidal_magnetic_field
-        geo_options["upstream_toroidal_magnetic_field"].setConditionallyUsed(); // Ensure upstream_toroidal_magnetic_field is not used
-        std::string toroidal_magnetic_field_str = geo_options["toroidal_magnetic_field"]
-            .doc("Function for the toroidal magnetic field strength Btor [T].")
-            .as<std::string>();
-        FieldGeneratorPtr toroidal_magnetic_field_function = FieldFactory::get()->parse(toroidal_magnetic_field_str, &geo_options);
-
-        // Generate the field data for toroidal_magnetic_field using the FieldGenerator object
-        // and normalize the field
-        BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
-            toroidal_magnetic_field[i] = toroidal_magnetic_field_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Bnorm;
+        geo_options["upstream_toroidal_magnetic_field"].setConditionallyUsed();
+        
+        if (mesh->sourceHasVar("toroidal_magnetic_field")) {
+            output.write("Reading toroidal_magnetic_field from grid file\n");
+            mesh->get(toroidal_magnetic_field, "toroidal_magnetic_field");
+            toroidal_magnetic_field /= Bnorm;
+        } else {
+            output.write("Generating toroidal_magnetic_field from expression\n");
+            std::string toroidal_magnetic_field_str = geo_options["toroidal_magnetic_field"]
+                .doc("Function for the toroidal magnetic field strength Btor [T].")
+                .as<std::string>();
+            FieldGeneratorPtr toroidal_magnetic_field_function = 
+                FieldFactory::get()->parse(toroidal_magnetic_field_str, &geo_options);
+            
+            BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
+                toroidal_magnetic_field[i] = toroidal_magnetic_field_function->generate(
+                    bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Bnorm;
+            }
         }
     }
 
-    // Compute the total magnetic field strength
-    total_magnetic_field = sqrt(toroidal_magnetic_field*toroidal_magnetic_field + poloidal_magnetic_field*poloidal_magnetic_field);
-    // Compute the pitch angle
+    // ========================================
+    // Calculate derived quantities (unchanged from original)
+    // ========================================
+    total_magnetic_field = sqrt(toroidal_magnetic_field*toroidal_magnetic_field + 
+                                poloidal_magnetic_field*poloidal_magnetic_field);
     pitch_angle = poloidal_magnetic_field / total_magnetic_field;
-    // Compute the flux tube broadening factor due to cross-field transport
     transport_broadening = lambda_int / lambda_int(0, mesh->ystart, 0);
-    // Compute the flux expansion factor
     flux_expansion = pitch_angle(0, mesh->ystart, 0) / pitch_angle;
 
-    // Compute the effective magnetic field strength, which is the actual magnetic field strength divided by the transport broadening.
-    // This is used in the Jacobian calculation.
     Field3D effective_magnetic_field_strength = total_magnetic_field / transport_broadening;
 
-    // Bxy is no longer consistent with the Jacobian.
-    // Set equal to NaN, to prevent anyone from using it.
     BOUT_FOR(i, coord->Bxy.getRegion("RGN_ALL")) {
         coord->Bxy[i] = std::numeric_limits<BoutReal>::quiet_NaN();
     }
 
-    // Calculate the Jacobian
     for (int j = mesh->ystart; j <= mesh->yend; ++j) {
-        // N.b.
-        // The Jacobian has units of [m / radian T], which is why we need an extra factor of Lnorm.
         coord->J(0, j) = 1 / effective_magnetic_field_strength(0, j, 0) / Lnorm;
     }
 
-    // Parallel length of cell
     Field3D dlpar = coord->dy / Lnorm;
-    // Width of flux tube in the radial direction
     flux_tube_width = lambda_int * flux_expansion;
-    // Length of the cell in the poloidal direction
     cell_poloidal_length = dlpar * pitch_angle;
-    // Poloidal area of the cell (poloidal length times circumference)
     cell_side_area = cell_poloidal_length * 2.0 * PI * fieldline_radius;
-    // Volume of the cell (poloidal area times flux tube width)
     cell_volume = cell_side_area * flux_tube_width;
 
-    // Determine whether to output additional diagnostics
     diagnose = geo_options["diagnose"]
                     .doc("Output additional diagnostics?")
                     .withDefault<bool>(false);
 }
-
 void FieldlineGeometry::transform(Options& state) {
     // This method is intentionally left empty.
     // If you want the geometry to evolve during the simulation (for instance, increasing
