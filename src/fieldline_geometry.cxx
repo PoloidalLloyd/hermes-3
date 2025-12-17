@@ -80,11 +80,9 @@ Field3D calculate_Lpar() {
     total_magnetic_field.allocate();
     pitch_angle.allocate();
 
-    // ========================================
-    // Read or generate poloidal_magnetic_field
-    // ========================================
+    // get poloidal_magnetic_field from grid file or input file
     if (mesh->sourceHasVar("poloidal_magnetic_field")) {
-        output.write("Reading poloidal_magnetic_field from grid file\n");
+        //output.write("Reading poloidal_magnetic_field from grid file\n");
         mesh->get(poloidal_magnetic_field, "poloidal_magnetic_field");
         poloidal_magnetic_field /= Bnorm;
     } else {
@@ -92,62 +90,50 @@ Field3D calculate_Lpar() {
         std::string poloidal_magnetic_field_str = geo_options["poloidal_magnetic_field"]
             .doc("Function for the poloidal magnetic field strength Bpol [T].")
             .as<std::string>();
-        FieldGeneratorPtr poloidal_magnetic_field_function = 
-            FieldFactory::get()->parse(poloidal_magnetic_field_str, &geo_options);
+        FieldGeneratorPtr poloidal_magnetic_field_function = FieldFactory::get()->parse(poloidal_magnetic_field_str, &geo_options);
         
         BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
-            poloidal_magnetic_field[i] = poloidal_magnetic_field_function->generate(
-                bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Bnorm;
+            poloidal_magnetic_field[i] = poloidal_magnetic_field_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Bnorm;
         }
     }
 
-    // ========================================
-    // Read or generate fieldline_radius
-    // ========================================
+    // get fieldline_radius from grid file or input file
     if (mesh->sourceHasVar("fieldline_radius")) {
-        output.write("Reading fieldline_radius from grid file\n");
+        //output.write("Reading fieldline_radius from grid file\n");
         mesh->get(fieldline_radius, "fieldline_radius");
         fieldline_radius /= Lnorm;
     } else {
-        output.write("Generating fieldline_radius from expression\n");
+        //output.write("Generating fieldline_radius from expression\n");
         std::string fieldline_radius_str = geo_options["fieldline_radius"]
             .doc("Function for the fieldline major radius R [m].")
             .as<std::string>();
-        FieldGeneratorPtr fieldline_radius_function = 
-            FieldFactory::get()->parse(fieldline_radius_str, &geo_options);
+        FieldGeneratorPtr fieldline_radius_function = FieldFactory::get()->parse(fieldline_radius_str, &geo_options);
         
         BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
-            fieldline_radius[i] = fieldline_radius_function->generate(
-                bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
+            fieldline_radius[i] = fieldline_radius_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
         }
     }
 
-    // ========================================
-    // Read or generate lambda_int
-    // ========================================
+    // get lambda_int from grid file or input file
     if (mesh->sourceHasVar("lambda_int")) {
-        output.write("Reading lambda_int from grid file\n");
+        //output.write("Reading lambda_int from grid file\n");
         mesh->get(lambda_int, "lambda_int");
         lambda_int /= Lnorm;
     } else {
-        output.write("Generating lambda_int from expression\n");
+        //output.write("Generating lambda_int from expression\n");
         std::string lambda_int_str = geo_options["lambda_int"]
             .doc("Function for the integral heat flux width lambda_int = lambda_q + 1.64 S [m].")
             .as<std::string>();
-        FieldGeneratorPtr lambda_int_function = 
-            FieldFactory::get()->parse(lambda_int_str, &geo_options);
+        FieldGeneratorPtr lambda_int_function = FieldFactory::get()->parse(lambda_int_str, &geo_options);
         
         BOUT_FOR(i, lpar.getRegion("RGN_ALL")) {
-            lambda_int[i] = lambda_int_function->generate(
-                bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;
-        }
+            lambda_int[i] = lambda_int_function->generate(bout::generator::Context().set("lpar", lpar[i] * Lnorm)) / Lnorm;}
     }
 
-    // ========================================
+
     // Determine toroidal_magnetic_field
-    // ========================================
     bool compute_B_from_R = geo_options["compute_Btor_from_R"]
-        .doc("Compute Btor = B_tor,upstream * R_upstream / R if true, or else use a function for toroidal_magnetic_field")
+        .doc("Compute Btor = B_tor,upstream * R_upstream / R if true, or else use the grid value or input file function for toroidal_magnetic_field")
         .withDefault<bool>(true);
 
     if (compute_B_from_R) {
@@ -159,13 +145,12 @@ Field3D calculate_Lpar() {
                                   fieldline_radius(0, mesh->ystart, 0) / fieldline_radius;
     } else {
         geo_options["upstream_toroidal_magnetic_field"].setConditionallyUsed();
-        
         if (mesh->sourceHasVar("toroidal_magnetic_field")) {
-            output.write("Reading toroidal_magnetic_field from grid file\n");
+            //output.write("Reading toroidal_magnetic_field from grid file\n");
             mesh->get(toroidal_magnetic_field, "toroidal_magnetic_field");
             toroidal_magnetic_field /= Bnorm;
         } else {
-            output.write("Generating toroidal_magnetic_field from expression\n");
+            //output.write("Generating toroidal_magnetic_field from expression\n");
             std::string toroidal_magnetic_field_str = geo_options["toroidal_magnetic_field"]
                 .doc("Function for the toroidal magnetic field strength Btor [T].")
                 .as<std::string>();
@@ -179,9 +164,8 @@ Field3D calculate_Lpar() {
         }
     }
 
-    // ========================================
-    // Calculate derived quantities (unchanged from original)
-    // ========================================
+
+    // Calculate derived quantities
     total_magnetic_field = sqrt(toroidal_magnetic_field*toroidal_magnetic_field + 
                                 poloidal_magnetic_field*poloidal_magnetic_field);
     pitch_angle = poloidal_magnetic_field / total_magnetic_field;
