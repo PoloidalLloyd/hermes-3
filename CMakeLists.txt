@@ -90,6 +90,7 @@ set(HERMES_SOURCES
     src/anomalous_diffusion.cxx
     src/binormal_stpm.cxx
     src/recycling.cxx
+    src/reservoir.cxx
     src/adas_reaction.cxx
     src/noflow_boundary.cxx
     src/neutral_parallel_diffusion.cxx
@@ -104,6 +105,9 @@ set(HERMES_SOURCES
     src/detachment_controller.cxx
     src/reaction.cxx
     src/reaction_parser.cxx
+    src/fieldline_geometry.cxx
+    src/thermal_force.cxx
+    src/ion_viscosity.cxx
     src/transform.cxx
     src/vorticity.cxx
     include/adas_reaction.hxx
@@ -153,6 +157,7 @@ set(HERMES_SOURCES
     include/reaction.hxx
     include/recalculate_metric.hxx
     include/recycling.hxx
+    include/reservoir.hxx
     include/relax_potential.hxx
     include/sheath_boundary.hxx
     include/sheath_boundary_simple.hxx
@@ -169,6 +174,7 @@ set(HERMES_SOURCES
     include/transform.hxx
     include/fixed_fraction_radiation.hxx
     include/simple_pump.hxx
+    include/fieldline_geometry.hxx
     )
 
 # Compile Hermes sources into a library, which can be used for unit tests

@@ -62,6 +62,7 @@
 #include "include/polarisation_drift.hxx"
 #include "include/quasineutral.hxx"
 #include "include/recycling.hxx"
+#include "include/reservoir.hxx"
 #include "include/relax_potential.hxx"
 #include "include/scale_timederivs.hxx"
 #include "include/set_temperature.hxx"
@@ -80,10 +81,14 @@
 #include "include/upstream_density_feedback.hxx"
 #include "include/vorticity.hxx"
 #include "include/zero_current.hxx"
+#include "include/simple_pump.hxx"
+#include "include/fieldline_geometry.hxx"
+#include <bout/constants.hxx>
 #include <bout/boundary_factory.hxx>
 #include <bout/boundary_op.hxx>
 #include <bout/constants.hxx>
 #include <bout/field_factory.hxx>
+
 
 #include "include/recalculate_metric.hxx"
 
