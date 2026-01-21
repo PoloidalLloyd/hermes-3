@@ -115,7 +115,7 @@ Field3D calculate_Lpar() {
     }
 
     // get lambda_int from grid file or input file
-    if (mesh->sourceHasVar("lambda_int")) {
+    if (mesh->sourceHasVar("lambda_int")) {`
         //output.write("Reading lambda_int from grid file\n");
         mesh->get(lambda_int, "lambda_int");
         lambda_int /= Lnorm;
@@ -191,11 +191,17 @@ Field3D calculate_Lpar() {
     diagnose = geo_options["diagnose"]
                     .doc("Output additional diagnostics?")
                     .withDefault<bool>(false);
-}
+}on
 void FieldlineGeometry::transform(Options& state) {
-    // This method is intentionally left empty.
-    // If you want the geometry to evolve during the simulation (for instance, increasing
-    // the cross-field broadening based on divertor conditions) you can implement it here.
+    AUTO_TRACE();
+
+    // Publish geometry fields into the simulation state so other components can use them
+    // during their `transform()` calls.
+    //
+    // Note: `outputVars()` is called later (typically only when writing output), so it is
+    // not suitable for providing fields needed by other components at runtime.
+    set(state[std::string("fieldline_geometry_cell_side_area")], cell_side_area);
+    set(state[std::string("fieldline_geometry_cell_volume")], cell_volume);
 }
 
 /**

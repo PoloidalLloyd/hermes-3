@@ -50,6 +50,8 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
   reservoir_sink_only = 
     options["reservoir_sink_only"].doc("Set reservoir to only take particles away?").withDefault<bool>(true);
 
+  density_floor = options["density_floor"].doc("Minimum density floor").withDefault<BoutReal>(1e-7);
+
   xpoint_position =
       options["xpoint_position"]
           .doc("Parallel position of X-point [m]")
@@ -65,7 +67,7 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
       .doc("Area of radial regions. Specify as an analytical function.")
       .withDefault<Field3D>(0.0);
 
-  // area = 1; // This is constant, and wrong! 
+  area = 1; // This is constant, and wrong! 
  
   BoutReal Anorm = SQ(get<BoutReal>(units["meters"]));
   area /= Anorm;
@@ -135,6 +137,12 @@ void Reservoir::transform(Options& state) {
   location_div_sol = 0; 
   location_div_pfr = 0;
 
+  // If fieldline geometry is available in the state, use it for area/volume (should add error handling)
+
+  area = get<Field3D>(state["fieldline_geometry_cell_side_area"]);
+  volume = get<Field3D>(state["fieldline_geometry_cell_volume"]);
+
+
 
   // Get conditions. Boundary conditions do not need to be set
   // because we don't use the state in the boundary cells.
@@ -146,22 +154,27 @@ void Reservoir::transform(Options& state) {
 
   Field3D vth = 0.25 * sqrt( (8*T) / (PI*AA) );    // 1D maxwellian particle flux in 3D system (Stangeby)
 
-  // Pressure and momentum flows proportional to density
+  // Pressure and momentum mass flows proportional to density
   // When flow is reversed and these become sources, the new particles have
   // the same pressure and momentum as the local particles.
 
   BOUT_FOR(i, N.getRegion("RGN_NOBNDRY")) {
 
+    // add flooring to avoid division by zero
+    Field3D Nfloor = softFloor(N, density_floor);
+    Field3D Pfloor = softFloor(P, 0.0);
+    Field3D NVfloor = softFloor(NV, 0.0);
+
     // Main SOL reservoir
     //////////////////////////////////////////
     if (lpar[i] <= baffle_position) {
-      BoutReal Nrate = (density_main_sol - N[i]) * area[i] * vth[i] * velocity_factor_main_sol;
+      BoutReal Nrate = (density_main_sol - Nfloor[i]) * area[i] * vth[i] * velocity_factor_main_sol;
       if (reservoir_sink_only && Nrate > 0) {
         Nrate = 0;
       };
 
-      BoutReal Prate  = P[i]  / N[i] * Nrate;
-      BoutReal NVrate = NV[i] / N[i] * Nrate;
+      BoutReal Prate  = P[i]  / Nfloor[i] * Nrate;
+      BoutReal NVrate = NVfloor[i] / Nfloor[i] * Nrate;
 
       density_source_main_sol[i]  += Nrate / volume[i] ; // j*dy to get volume
       energy_source_main_sol[i]   += (3. / 2) * Prate / volume[i];
@@ -172,13 +185,13 @@ void Reservoir::transform(Options& state) {
     // Divertor SOL reservoir
     //////////////////////////////////////////
     if (lpar[i] > baffle_position) {
-      BoutReal Nrate = (density_div_sol - N[i]) * area[i] * vth[i] * velocity_factor_div_sol;
+      BoutReal Nrate = (density_div_sol - Nfloor[i]) * area[i] * vth[i] * velocity_factor_div_sol;
       if (reservoir_sink_only && Nrate > 0) {
         Nrate = 0;
       };
 
-      BoutReal Prate  = P[i]  / N[i] * Nrate;
-      BoutReal NVrate = NV[i] / N[i] * Nrate;
+      BoutReal Prate  = Pfloor[i]  / Nfloor[i] * Nrate;
+      BoutReal NVrate = NVfloor[i] / Nfloor[i] * Nrate;
 
       density_source_div_sol[i]  += Nrate/ volume[i];
       energy_source_div_sol[i]   += (3. / 2) * Prate/ volume[i];
@@ -189,13 +202,13 @@ void Reservoir::transform(Options& state) {
     // Divertor PFR reservoir
     //////////////////////////////////////////
     if (lpar[i] > baffle_position) {
-      BoutReal Nrate = (density_div_pfr - N[i]) * area[i] * vth[i] * velocity_factor_div_pfr;
+      BoutReal Nrate = (density_div_pfr - Nfloor[i]) * area[i] * vth[i] * velocity_factor_div_pfr;
       if (reservoir_sink_only && Nrate > 0) {
         Nrate = 0;
       };
 
-      BoutReal Prate  = P[i]  / N[i] * Nrate;
-      BoutReal NVrate = NV[i] / N[i] * Nrate;
+      BoutReal Prate  = Pfloor[i]  / Nfloor[i] * Nrate;
+      BoutReal NVrate = NVfloor[i] / Nfloor[i] * Nrate;
 
       density_source_div_pfr[i]  += Nrate / volume[i];
       energy_source_div_pfr[i]   += (3. / 2) * Prate / volume[i];
@@ -214,13 +227,14 @@ void Reservoir::transform(Options& state) {
 void Reservoir::outputVars(Options& state) {
   AUTO_TRACE();
 
-  // Normalisations
+  // Normalisations - get them from state with the correct keys
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
   auto Tnorm = get<BoutReal>(state["Tnorm"]);
   auto Cs0 = get<BoutReal>(state["Cs0"]);
 
-  auto Anorm = SQ(get<BoutReal>(state["meters"]));
+  auto Lnorm = get<BoutReal>(state["rho_s0"]);  // Use rho_s0 for length
+  BoutReal Anorm = SQ(Lnorm);  // Area normalization
   BoutReal Pnorm = SI::qe * Tnorm * Nnorm; // Pressure normalisation
 
   // Always save reservoir location (time independent)

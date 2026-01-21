@@ -48,6 +48,7 @@ private:
 
   bool diagnose, reservoir_sink_only;
   BoutReal baffle_position, xpoint_position;   // Parallel positions of reservoirs and xpoint
+  BoutReal density_floor;  // Used to avoid division-by-zero when computing source terms
 
   /// Cell indices where reservoir_location > 0
   Region<Ind3D> region_div_sol;
