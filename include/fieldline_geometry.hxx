@@ -19,18 +19,17 @@ struct FieldlineGeometry : public Component {
   FieldlineGeometry(std::string, Options& options, Solver*);
 
   /**
-   * @brief Transform function (not implemented).
-   * @param state Options containing the state.
-   */
-  void transform(Options& state) override;
-  
-  /**
    * @brief Output variables to the state.
    * @param state Options containing the state.
    */
   void outputVars(Options& state) override;
 
-  private:
+private:
+  /**
+   * @brief Transform function - publishes geometry to state.
+   * @param state GuardedOptions containing the state.
+   */
+  void transform_impl(GuardedOptions& state) override;
     bool diagnose;  ///< Flag to output additional diagnostics.
 
     Field3D lpar{0.0}; ///< Parallel distance from upstream.

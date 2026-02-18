@@ -23,6 +23,9 @@ struct Reservoir : public Component {
   ///   - diagnose              bool. Save sources/sinks
   Reservoir(std::string name, Options& alloptions, Solver*);
 
+  void outputVars(Options& state) override;
+
+private:
   /// # Inputs
   /// - species
   ///   - <name>
@@ -36,14 +39,13 @@ struct Reservoir : public Component {
   ///     - density_source
   ///     - energy_source
   ///     - momentum_source
-  void transform(Options& state) override;
-  void outputVars(Options& state) override;
+  void transform_impl(GuardedOptions& state) override;
 
-private:
   std::string name;           ///< Short name of the species e.g. h+
   Field3D reservoir_location; ///< Indicates reservoir if >0
   BoutReal density_div_sol, density_div_pfr, density_main_sol;
   BoutReal velocity_factor_div_sol, velocity_factor_div_pfr, velocity_factor_main_sol;
+  BoutReal en_src_multiplier, mv_src_multiplier;
   Field3D location_div_sol, location_div_pfr, location_main_sol;
 
   bool diagnose, reservoir_sink_only;
@@ -54,6 +56,7 @@ private:
   Region<Ind3D> region_div_sol;
 
   Field3D density_source, energy_source, momentum_source;
+  Field3D Nrate;   
   Field3D density_source_main_sol, energy_source_main_sol, momentum_source_main_sol;
   Field3D density_source_div_sol, energy_source_div_sol, momentum_source_div_sol;
   Field3D density_source_div_pfr, energy_source_div_pfr, momentum_source_div_pfr;

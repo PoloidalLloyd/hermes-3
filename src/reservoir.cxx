@@ -1,18 +1,28 @@
 
 #include "../include/reservoir.hxx"
-#include "../include/hermes_utils.hxx" // For indexAt
 #include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
-#include <iostream> // For outputting to log file
 
 using bout::globals::mesh;
 
-Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name) {
+Reservoir::Reservoir(std::string name, Options& alloptions, Solver*)
+    : Component({readOnly("fieldline_geometry_cell_side_area"),
+                 readOnly("fieldline_geometry_cell_volume"),
+                 readOnly("species:{name}:density", Regions::Interior),
+                 readOnly("species:{name}:pressure", Regions::Interior),
+                 readOnly("species:{name}:temperature", Regions::Interior),
+                 readOnly("species:{name}:momentum", Regions::Interior),
+                 readOnly("species:{name}:AA"),
+                 readWrite("species:{name}:density_source"),
+                 readWrite("species:{name}:energy_source"),
+                 readWrite("species:{name}:momentum_source")}),
+      name(name) {
   AUTO_TRACE();
 
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
+  const BoutReal Lnorm = units["meters"];
   const BoutReal Omega_ci = 1. / units["seconds"].as<BoutReal>();
 
   // Get the options for this species
@@ -22,6 +32,14 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
                           .doc("Set the density of the reservoir in [m^-3]. Default 1e19")
                           .withDefault<BoutReal>(1e19)
                       / Nnorm;
+  en_src_multiplier = options["en_src_multiplier"]
+                          .doc("Multiply the energy source by this factor. Default 1")
+                          .withDefault<BoutReal>(1);
+  mv_src_multiplier = options["mv_src_multiplier"]
+                          .doc("Multiply the momentum source by this factor. Default 1")
+                          .withDefault<BoutReal>(1);
+
+
   density_div_pfr = options["density_div_pfr"]
                           .doc("Set the density of the reservoir in [m^-3]. Default 1e19")
                           .withDefault<BoutReal>(1e19)
@@ -50,17 +68,19 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
   reservoir_sink_only = 
     options["reservoir_sink_only"].doc("Set reservoir to only take particles away?").withDefault<bool>(true);
 
-  density_floor = options["density_floor"].doc("Minimum density floor").withDefault<BoutReal>(1e-7);
+  density_floor = options["density_floor"].doc("Minimum density floor [m^-3]").withDefault<BoutReal>(1e-7) / Nnorm;
 
   xpoint_position =
       options["xpoint_position"]
           .doc("Parallel position of X-point [m]")
-          .withDefault<BoutReal>(0);
+          .withDefault<BoutReal>(0)
+      / Lnorm;  // Normalize to match lpar units
 
   baffle_position =
       options["baffle_position"]
           .doc("Parallel position of border between upstream-SOL and divertor-SOL reservoirs [m]")
-          .withDefault<BoutReal>(xpoint_position);
+          .withDefault<BoutReal>(xpoint_position * Lnorm)  // Default is unnormalized xpoint
+      / Lnorm;  // Normalize to match lpar units
 
   // Get the area of the radial reservoir_region
   area = options["area"]
@@ -102,6 +122,7 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
 
   MPI_Bcast(&offset, 1, MPI_DOUBLE, 0, BoutComm::get());  // Ensure all procs get offset
   lpar -= offset;
+  lpar /= Lnorm;  // Normalize lpar to match baffle_position units
 
   // Capture reservoir locations and regions
   // location_div_sol = 0;
@@ -115,34 +136,34 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*) : name(name
   //   }
   // }
   // region_div_sol = Region<Ind3D>(indices);
+
+  substitutePermissions("name", {name});
 }
 
-void Reservoir::transform(Options& state) {
+void Reservoir::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
-  // We are operating on only one species
-  auto& species = state["species"][name];
-
-  // These are the sources we are computing which we will add to state sources at the end
-  density_source_main_sol = 0; 
-  density_source_div_sol = 0; 
+  // Initialize output fields to zero (needed for outputVars even if we return early)
+ 
+  density_source_main_sol = 0;
+  density_source_div_sol = 0;
   density_source_div_pfr = 0;
-  energy_source_main_sol = 0; 
-  energy_source_div_sol = 0; 
+  energy_source_main_sol = 0;
+  energy_source_div_sol = 0;
   energy_source_div_pfr = 0;
-  momentum_source_main_sol = 0; 
-  momentum_source_div_sol = 0; 
+  momentum_source_main_sol = 0;
+  momentum_source_div_sol = 0;
   momentum_source_div_pfr = 0;
-  location_main_sol = 0; 
-  location_div_sol = 0; 
+  location_main_sol = 0;
+  location_div_sol = 0;
   location_div_pfr = 0;
 
-  // If fieldline geometry is available in the state, use it for area/volume (should add error handling)
+  // We are operating on only one species
+  GuardedOptions species = state["species"][name];
 
+  // If fieldline geometry is available in the state, use it for area/volume (should add error handling)
   area = get<Field3D>(state["fieldline_geometry_cell_side_area"]);
   volume = get<Field3D>(state["fieldline_geometry_cell_volume"]);
-
-
 
   // Get conditions. Boundary conditions do not need to be set
   // because we don't use the state in the boundary cells.
@@ -158,13 +179,11 @@ void Reservoir::transform(Options& state) {
   // When flow is reversed and these become sources, the new particles have
   // the same pressure and momentum as the local particles.
 
+  // Apply flooring to density to prevent division by zero
+  // No flooring needed for P and NV - they can be zero or negative
+  Field3D Nfloor = softFloor(N, density_floor);
+
   BOUT_FOR(i, N.getRegion("RGN_NOBNDRY")) {
-
-    // add flooring to avoid division by zero
-    Field3D Nfloor = softFloor(N, density_floor);
-    Field3D Pfloor = softFloor(P, 0.0);
-    Field3D NVfloor = softFloor(NV, 0.0);
-
     // Main SOL reservoir
     //////////////////////////////////////////
     if (lpar[i] <= baffle_position) {
@@ -174,11 +193,11 @@ void Reservoir::transform(Options& state) {
       };
 
       BoutReal Prate  = P[i]  / Nfloor[i] * Nrate;
-      BoutReal NVrate = NVfloor[i] / Nfloor[i] * Nrate;
+      BoutReal NVrate = NV[i] / Nfloor[i] * Nrate;
 
-      density_source_main_sol[i]  += Nrate / volume[i] ; // j*dy to get volume
-      energy_source_main_sol[i]   += (3. / 2) * Prate / volume[i];
-      momentum_source_main_sol[i] += NVrate / volume[i];
+      density_source_main_sol[i]  += Nrate / volume[i];
+      energy_source_main_sol[i]   += (3. / 2) * Prate / volume[i] * en_src_multiplier;
+      momentum_source_main_sol[i] += NVrate / volume[i] * mv_src_multiplier;
       location_main_sol[i] = 1;
     }
 
@@ -190,35 +209,23 @@ void Reservoir::transform(Options& state) {
         Nrate = 0;
       };
 
-      BoutReal Prate  = Pfloor[i]  / Nfloor[i] * Nrate;
-      BoutReal NVrate = NVfloor[i] / Nfloor[i] * Nrate;
+      BoutReal Prate  = P[i]  / Nfloor[i] * Nrate;
+      BoutReal NVrate = NV[i] / Nfloor[i] * Nrate;
 
-      density_source_div_sol[i]  += Nrate/ volume[i];
-      energy_source_div_sol[i]   += (3. / 2) * Prate/ volume[i];
-      momentum_source_div_sol[i] += NVrate/ volume[i];
+      density_source_div_sol[i]  += Nrate / volume[i];
+      energy_source_div_sol[i]   += ((3. / 2) * Prate / volume[i]) * en_src_multiplier;
+      momentum_source_div_sol[i] += (NVrate / volume[i]) * mv_src_multiplier;
       location_div_sol[i] = 1;
     }
 
     // Divertor PFR reservoir
     //////////////////////////////////////////
-    if (lpar[i] > baffle_position) {
-      BoutReal Nrate = (density_div_pfr - Nfloor[i]) * area[i] * vth[i] * velocity_factor_div_pfr;
-      if (reservoir_sink_only && Nrate > 0) {
-        Nrate = 0;
-      };
-
-      BoutReal Prate  = Pfloor[i]  / Nfloor[i] * Nrate;
-      BoutReal NVrate = NVfloor[i] / Nfloor[i] * Nrate;
-
-      density_source_div_pfr[i]  += Nrate / volume[i];
-      energy_source_div_pfr[i]   += (3. / 2) * Prate / volume[i];
-      momentum_source_div_pfr[i] += NVrate / volume[i];
-      location_div_pfr[i] = 1;
-    }
-    
+    // Note: PFR region requires additional logic to define its spatial extent
+    // Currently using velocity_factor_div_pfr = 0 to disable
 
   }
 
+  // Add all source terms to the species
   add(species["density_source"], density_source_main_sol + density_source_div_sol + density_source_div_pfr);
   add(species["energy_source"], energy_source_main_sol + energy_source_div_sol + energy_source_div_pfr);
   add(species["momentum_source"], momentum_source_main_sol + momentum_source_div_sol + momentum_source_div_pfr);
@@ -250,6 +257,19 @@ void Reservoir::outputVars(Options& state) {
           {"standard_name", "area"},
           {"long_name", name + std::string(" area")},
           {"source", "reservoir"}});
+
+
+
+    // Reservoir rate
+    set_with_attrs(
+      state[{std::string("Nrate") + name + std::string("_rsv")}], Nrate,
+      {{"time_dimension", "t"},
+      {"units", "m^-3 s^-1"},
+      {"conversion", Omega_ci},
+      {"standard_name", "particle transfer rate"},
+      {"long_name", name + std::string(" particle transfer rate from reservoir")},
+      {"source", "reservoir"}});
+
 
     // Main sol reservoir
     ///////////////////////////
@@ -285,6 +305,8 @@ void Reservoir::outputVars(Options& state) {
           {"long_name", name + std::string(" momentum transfer from div sol reservoir")},
           {"source", "reservoir"}});
 
+
+
     // Div sol reservoir
     ///////////////////////////
     set_with_attrs(state[{std::string("rsv_div_sol_") + name}], location_div_sol,
@@ -318,6 +340,8 @@ void Reservoir::outputVars(Options& state) {
           {"standard_name", "momentum transfer"},
           {"long_name", name + std::string(" momentum transfer from div sol reservoir")},
           {"source", "reservoir"}});
+
+      
 
 
     // Div pfr reservoir

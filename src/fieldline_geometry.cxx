@@ -62,7 +62,9 @@ Field3D calculate_Lpar() {
  * It calculates and stores various geometric quantities such as the parallel length,
  * magnetic field components, flux expansion, and cell dimensions.
  */
- FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*) {
+ FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*)
+    : Component({readWrite("fieldline_geometry_cell_side_area"),
+                 readWrite("fieldline_geometry_cell_volume")}) {
     Options& geo_options = options["fieldline_geometry"];
     const Options& mesh_options = options["mesh"];
     const Options& units = options["units"];
@@ -115,7 +117,7 @@ Field3D calculate_Lpar() {
     }
 
     // get lambda_int from grid file or input file
-    if (mesh->sourceHasVar("lambda_int")) {`
+    if (mesh->sourceHasVar("lambda_int")) {
         //output.write("Reading lambda_int from grid file\n");
         mesh->get(lambda_int, "lambda_int");
         lambda_int /= Lnorm;
@@ -191,8 +193,9 @@ Field3D calculate_Lpar() {
     diagnose = geo_options["diagnose"]
                     .doc("Output additional diagnostics?")
                     .withDefault<bool>(false);
-}on
-void FieldlineGeometry::transform(Options& state) {
+}
+
+void FieldlineGeometry::transform_impl(GuardedOptions& state) {
     AUTO_TRACE();
 
     // Publish geometry fields into the simulation state so other components can use them
