@@ -3,6 +3,7 @@
 #include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
 #include <bout/field_factory.hxx>
+#include <bout/msg_stack.hxx>
 #include <cmath>
 
 using bout::globals::mesh;
@@ -196,7 +197,7 @@ Field3D calculate_Lpar() {
 }
 
 void FieldlineGeometry::transform_impl(GuardedOptions& state) {
-    AUTO_TRACE();
+    TRACE("FieldlineGeometry::transform_impl");
 
     // Publish geometry fields into the simulation state so other components can use them
     // during their `transform()` calls.
@@ -215,7 +216,7 @@ void FieldlineGeometry::transform_impl(GuardedOptions& state) {
  * so that they can be used by other components or output to files.
  */
 void FieldlineGeometry::outputVars(Options& state) {
-    AUTO_TRACE();  // Automatically add tracing information for debugging purposes
+    TRACE("FieldlineGeometry::outputVars");
     auto Lnorm = get<BoutReal>(state["rho_s0"]);  // Get the length normalization factor from the state
     auto Bnorm = get<BoutReal>(state["Bnorm"]);   // Get the magnetic field normalization factor from the state
 

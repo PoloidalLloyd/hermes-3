@@ -2,6 +2,7 @@
 #include <bout/constants.hxx>
 #include <bout/coordinates.hxx>
 #include <bout/mesh.hxx>
+#include <bout/msg_stack.hxx>
 
 using bout::globals::mesh;
 
@@ -17,7 +18,7 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*)
                  readWrite("species:{name}:energy_source"),
                  readWrite("species:{name}:momentum_source")}),
       name(name) {
-  AUTO_TRACE();
+  TRACE("Reservoir::Reservoir");
 
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
@@ -124,7 +125,7 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*)
 }
 
 void Reservoir::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
+  TRACE("Reservoir::transform_impl");
 
   density_source_main_sol = 0;
   density_source_div_sol = 0;
@@ -159,7 +160,7 @@ void Reservoir::transform_impl(GuardedOptions& state) {
 
     // Main SOL reservoir
     //////////////////////////////////////////
-    if (lpar[i] <= baffle_position) {
+    if (lpar[i] <= baffle_position) {`
       BoutReal Nrate_local =
           (density_main_sol - Nfloor[i]) * area[i] * vth[i] * velocity_factor_main_sol;
       if (reservoir_sink_only && Nrate_local > 0) {
@@ -208,7 +209,7 @@ void Reservoir::transform_impl(GuardedOptions& state) {
 }
 
 void Reservoir::outputVars(Options& state) {
-  AUTO_TRACE();
+  TRACE("Reservoir::outputVars");
 
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);
