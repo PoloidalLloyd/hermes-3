@@ -22,6 +22,7 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*)
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
   const BoutReal Lnorm = units["meters"];
+  const BoutReal Tnorm = units["eV"];
 
   // Get the options for this species
   Options& options = alloptions[name];
@@ -30,21 +31,31 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*)
                           .doc("Set the density of the reservoir in [m^-3]. Default 1e19")
                           .withDefault<BoutReal>(1e19)
                       / Nnorm;
-  en_src_multiplier = options["en_src_multiplier"]
-                          .doc("Multiply the energy source by this factor. Default 1")
-                          .withDefault<BoutReal>(1);
-  mv_src_multiplier = options["mv_src_multiplier"]
-                          .doc("Multiply the momentum source by this factor. Default 1")
-                          .withDefault<BoutReal>(1);
+
+  temperature_div_sol = options["temperature_div_sol"]
+                          .doc("Set the temperature of the reservoir in [eV]. Default 1")
+                          .withDefault<BoutReal>(1)
+                      / Tnorm;
 
   density_div_pfr = options["density_div_pfr"]
                           .doc("Set the density of the reservoir in [m^-3]. Default 1e19")
                           .withDefault<BoutReal>(1e19)
                       / Nnorm;
+
+  temperature_div_pfr = options["temperature_div_pfr"]
+                          .doc("Set the temperature of the reservoir in [eV]. Default 1")
+                          .withDefault<BoutReal>(1)
+                      / Tnorm;
+
   density_main_sol = options["density_main_sol"]
                           .doc("Set the density of the main SOL reservoir in [m^-3]. Default 1e19")
                           .withDefault<BoutReal>(1e19)
                       / Nnorm;
+
+  temperature_main_sol = options["temperature_main_sol"]
+                          .doc("Set the temperature of the reservoir in [eV]. Default 1")
+                          .withDefault<BoutReal>(1)
+                      / Tnorm;
 
   velocity_factor_div_sol =
       options["velocity_factor_div_sol"]
@@ -126,6 +137,19 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*)
 void Reservoir::transform_impl(GuardedOptions& state) {
   AUTO_TRACE();
 
+  // Bi-channel reservoir (Assumed to be neutral reservoir)
+  // if Nrate_local > 0, then particles are transferred from the reservoir to the plasma
+  // at the reservoir temperature, currently the transport is assumed to be purley radial
+  // meaning that the parallel momentum is set to zero
+  // if Nrate_local < 0, then particles are transferred from the plasma to the reservoir
+  // at the plasma temperature, the neutral momentum is transferred from the plasma, where it is
+  // assumed to travel ballistically to the wall, where it is reflected and eventually thermalises
+  // with the reservoir.
+
+  // TODO: add option to allow for plasma reservoir
+  // TODO: allow for partial parallel momentum
+  
+
   density_source_main_sol = 0;
   density_source_div_sol = 0;
   density_source_div_pfr = 0;
@@ -159,23 +183,31 @@ void Reservoir::transform_impl(GuardedOptions& state) {
 
     // Main SOL reservoir
     //////////////////////////////////////////
-    if (lpar[i] <= baffle_position) {
-      BoutReal Nrate_local =
-          (density_main_sol - Nfloor[i]) * area[i] * vth[i] * velocity_factor_main_sol;
-      if (reservoir_sink_only && Nrate_local > 0) {
-        Nrate_local = 0;
+      if (lpar[i] <= baffle_position) {
+        BoutReal Nrate_local =
+            (density_main_sol - Nfloor[i]) * area[i] * vth[i] * velocity_factor_main_sol;
+        if (reservoir_sink_only && Nrate_local > 0) {
+          Nrate_local = 0;
+        }
+      
+        if (Nrate_local > 0) {
+          // Reservoir -> plasma: arrives at reservoir temperature, no parallel momentum
+          BoutReal Prate = Nrate_local * temperature_main_sol;
+          density_source_main_sol[i] += Nrate_local / volume[i];
+          energy_source_main_sol[i]  += (3. / 2) * Prate / volume[i];
+
+        } else if (Nrate_local < 0) {
+          // Plasma -> reservoir: leaves at local temperature, carries local momentum
+          BoutReal Prate  = P[i]  / Nfloor[i] * Nrate_local;
+          BoutReal NVrate = NV[i] / Nfloor[i] * Nrate_local;
+          density_source_main_sol[i]  += Nrate_local / volume[i];
+          energy_source_main_sol[i]   += (3. / 2) * Prate / volume[i]
+          momentum_source_main_sol[i] += NVrate / volume[i]
+        }
+      
+        location_main_sol[i] = 1;
+        Nrate[i] = Nrate_local;
       }
-
-      BoutReal Prate  = P[i]  / Nfloor[i] * Nrate_local;
-      BoutReal NVrate = NV[i] / Nfloor[i] * Nrate_local;
-
-      density_source_main_sol[i]  += Nrate_local / volume[i];
-      energy_source_main_sol[i]   += (3. / 2) * Prate / volume[i] * en_src_multiplier;
-      momentum_source_main_sol[i] += NVrate / volume[i] * mv_src_multiplier;
-      location_main_sol[i] = 1;
-      Nrate[i] = Nrate_local;
-    }
-
     // Divertor SOL reservoir
     //////////////////////////////////////////
     if (lpar[i] > baffle_position) {
@@ -184,17 +216,23 @@ void Reservoir::transform_impl(GuardedOptions& state) {
       if (reservoir_sink_only && Nrate_local > 0) {
         Nrate_local = 0;
       }
-
-      BoutReal Prate  = P[i]  / Nfloor[i] * Nrate_local;
-      BoutReal NVrate = NV[i] / Nfloor[i] * Nrate_local;
-
-      density_source_div_sol[i]  += Nrate_local / volume[i];
-      energy_source_div_sol[i]   += ((3. / 2) * Prate / volume[i]) * en_src_multiplier;
-      momentum_source_div_sol[i] += (NVrate / volume[i]) * mv_src_multiplier;
+      if (Nrate_local > 0) {
+        // Reservoir -> plasma: arrives at reservoir temperature, no parallel momentum
+        BoutReal Prate = Nrate_local * temperature_div_sol;
+        density_source_div_sol[i] += Nrate_local / volume[i];
+        energy_source_div_sol[i]  += (3. / 2) * Prate / volume[i];
+      }
+      else if (Nrate_local < 0) {
+        // Plasma -> reservoir: leaves at local temperature, carries local momentum
+        BoutReal Prate  = P[i]  / Nfloor[i] * Nrate_local;
+        BoutReal NVrate = NV[i] / Nfloor[i] * Nrate_local;
+        density_source_div_sol[i]  += Nrate_local / volume[i];
+        energy_source_div_sol[i]   += (3. / 2) * Prate / volume[i];
+        momentum_source_div_sol[i] += NVrate / volume[i];
+      }
       location_div_sol[i] = 1;
       Nrate[i] = Nrate_local;
     }
-
     // Divertor PFR reservoir
     //////////////////////////////////////////
     // Note: PFR region requires additional logic to define its spatial extent
