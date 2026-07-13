@@ -24,3 +24,11 @@ Hermes-3 documentation
    feedback_control
    fieldline_geometry
    developer
+
+
+.. Dummy reference to the top-level breathe rst to suppress sphinx warning 
+
+.. toctree::
+   :hidden:
+
+   _breathe_autogen/filelist

@@ -24,3 +24,9 @@ spack-build*
 spack.lock
 .spack-env
 views
+
+# Tests
+**/Testing/**
+docker/work/
+docker/.env
+docker/docker-compose.override.yaml

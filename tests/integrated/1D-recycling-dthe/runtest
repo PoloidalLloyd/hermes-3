@@ -80,7 +80,9 @@ def fail_test():
 
 def optimisation_level(run_output):
     comp_flags_line = [
-        l for l in run_output.split("\n") if l.startswith("\tCompiled with flags")
+        line
+        for line in run_output.split("\n")
+        if line.startswith("\tCompiled with flags")
     ]
     if len(comp_flags_line) == 1:
         comp_flags = comp_flags_line[0].split()
@@ -120,31 +122,31 @@ with open("run.log", "w") as f:
 fail_on_missing_data()
 
 # Examine last output
-ds = xhermes.open(data_dir, unnormalise=False).hermes.extract_1d_tokamak_geometry()
+ds = xhermes.open(data_dir, unnormalise=False)
 ds_last = ds.isel(t=-1)
 
 # fmt: off
 # Check the values of various diagnostics
 # Diagnostic names and reference values (generated with -O1)
 diags_ref = {
-    "Ed+t_cx": -0.00023620535893063399,
-    "Edd+_cx": 2.9343286852402813e-05,
-    "Edt+_cx": -0.00026917215840358076,
-    "Et+d_cx": -0.0003328909005722493,
-    "Etd+_cx": -0.0002463479543128938,
-    "Ett+_cx": 1.6901539608568433e-05,
-    "Fd+t_cx": -5.942064642716903e-05,
-    "Fdd+_cx": 9.141841216238106e-05,
-    "Fdt+_cx": -1.4714592209841299e-05,
-    "Ft+d_cx": -5.178881170800972e-05,
-    "Ftd+_cx": -1.6272330148884757e-06,
-    "Ftt+_cx": 2.561818691160369e-05,
-    "Kdd+_cx": 0.009792335533604365,
-    "Kdt+_cx": 0.0061757164382375985,
-    "Ktd+_cx": 0.009413185313428586,
-    "Ktt+_cx": 0.005896736941813992,
-    "Sdt+_cx": -0.0004883584931543128,
-    "Std+_cx": -0.0004009791378759027,
+    "Ed+t_cx": -0.00023022616112319548,
+    "Edd+_cx": 2.975927431004893e-05,
+    "Edt+_cx": -0.0002621872352224295,
+    "Et+d_cx": -0.00032588653142951086,
+    "Etd+_cx": -0.00024015897644220566,
+    "Ett+_cx": 1.6822763185010437e-05,
+    "Fd+t_cx": -5.8563399976966175e-05,
+    "Fdd+_cx": 9.027621830270468e-05,
+    "Fdt+_cx": -1.4726394264854787e-05,
+    "Ft+d_cx": -5.0532345760991775e-05,
+    "Ftd+_cx": -1.4891772055354547e-06,
+    "Ftt+_cx": 2.4923258123494725e-05,
+    "Kdd+_cx": 0.009830072066450498,
+    "Kdt+_cx": 0.006176556744583669,
+    "Ktd+_cx": 0.009452191069489859,
+    "Ktt+_cx": 0.005899913515760506,
+    "Sdt+_cx": -0.00048248517902469573,
+    "Std+_cx": -0.00039546550914902655,
 }
 # fmt: on
 
