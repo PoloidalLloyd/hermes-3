@@ -6,7 +6,7 @@
 using bout::globals::mesh;
 
 Reservoir::Reservoir(std::string name, Options& alloptions, Solver*)
-    : Component({readOnly("fieldline_geometry_cell_side_area"),
+    : NamedComponent(name, {readOnly("fieldline_geometry_cell_side_area"),
                  readOnly("fieldline_geometry_cell_volume"),
                  readOnly("species:{name}:density", Regions::Interior),
                  readOnly("species:{name}:pressure", Regions::Interior),
@@ -15,9 +15,8 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*)
                  readOnly("species:{name}:AA"),
                  readWrite("species:{name}:density_source"),
                  readWrite("species:{name}:energy_source"),
-                 readWrite("species:{name}:momentum_source")}),
-      name(name) {
-  AUTO_TRACE();
+                 readWrite("species:{name}:momentum_source")}) {
+  this->name = name;  // Initialize the local name member
 
   const Options& units = alloptions["units"];
   const BoutReal Nnorm = units["inv_meters_cubed"];
@@ -103,7 +102,7 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*)
   // Get lpar
   const int MYPE = BoutComm::rank();
   const int NPES = BoutComm::size();
-  const int NYPE = NPES / mesh->NXPE;
+  const int NYPE = NPES / mesh->getNXPE();
   Coordinates *coord = mesh->getCoordinates();
 
   lpar = 0;
@@ -135,7 +134,6 @@ Reservoir::Reservoir(std::string name, Options& alloptions, Solver*)
 }
 
 void Reservoir::transform_impl(GuardedOptions& state) {
-  AUTO_TRACE();
 
   // Bi-channel reservoir (Assumed to be neutral reservoir)
   // if Nrate_local > 0, then particles are transferred from the reservoir to the plasma
@@ -246,7 +244,6 @@ void Reservoir::transform_impl(GuardedOptions& state) {
 }
 
 void Reservoir::outputVars(Options& state) {
-  AUTO_TRACE();
 
   auto Nnorm = get<BoutReal>(state["Nnorm"]);
   auto Omega_ci = get<BoutReal>(state["Omega_ci"]);

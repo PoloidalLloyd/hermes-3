@@ -16,7 +16,9 @@
 /// the local plasma) particles arrive at the reservoir temperature with no parallel
 /// momentum; when it acts as a sink they leave at the local temperature carrying
 /// local parallel momentum.
-struct Reservoir : public Component {
+struct Reservoir : public NamedComponent<Reservoir> {
+
+  static constexpr auto type = "reservoir";
 
   /// # Inputs
   /// - <name>
@@ -67,7 +69,7 @@ private:
 };
 
 namespace {
-RegisterComponent<Reservoir> registercomponentreservoir("reservoir");
+RegisterComponent<Reservoir> registercomponentreservoir;
 }
 
 #endif // RESERVOIR_H

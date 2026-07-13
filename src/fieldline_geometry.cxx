@@ -19,7 +19,7 @@ Field3D calculate_Lpar() {
     // Get lpar
     const int MYPE = BoutComm::rank();   // Current rank of the processor
     const int NPES = BoutComm::size();    // Total number of processors
-    const int NYPE = NPES / mesh->NXPE;    // Number of processors in the Y direction
+    const int NYPE = NPES / mesh->getNXPE();    // Number of processors in the Y direction
     Coordinates *coord = mesh->getCoordinates(); // Get the coordinates object from the mesh
     Field3D lpar{0.0}; // Initialize the parallel length field with 0.0
 
@@ -62,8 +62,8 @@ Field3D calculate_Lpar() {
  * It calculates and stores various geometric quantities such as the parallel length,
  * magnetic field components, flux expansion, and cell dimensions.
  */
- FieldlineGeometry::FieldlineGeometry(std::string, Options& options, Solver*)
-    : Component({readWrite("fieldline_geometry_cell_side_area"),
+ FieldlineGeometry::FieldlineGeometry(std::string name, Options& options, Solver*)
+    : NamedComponent(name, {readWrite("fieldline_geometry_cell_side_area"),
                  readWrite("fieldline_geometry_cell_volume")}) {
     Options& geo_options = options["fieldline_geometry"];
     const Options& mesh_options = options["mesh"];
@@ -184,7 +184,7 @@ Field3D calculate_Lpar() {
         coord->J(0, j) = 1 / effective_magnetic_field_strength(0, j, 0) / Lnorm;
     }
 
-    Field3D dlpar = coord->dy / Lnorm;
+    Field3D dlpar = Field3D(coord->dy) / Lnorm;
     flux_tube_width = lambda_int * flux_expansion;
     cell_poloidal_length = dlpar * pitch_angle;
     cell_side_area = cell_poloidal_length * 2.0 * PI * fieldline_radius;
@@ -196,7 +196,6 @@ Field3D calculate_Lpar() {
 }
 
 void FieldlineGeometry::transform_impl(GuardedOptions& state) {
-    AUTO_TRACE();
 
     // Publish geometry fields into the simulation state so other components can use them
     // during their `transform()` calls.
@@ -215,7 +214,6 @@ void FieldlineGeometry::transform_impl(GuardedOptions& state) {
  * so that they can be used by other components or output to files.
  */
 void FieldlineGeometry::outputVars(Options& state) {
-    AUTO_TRACE();  // Automatically add tracing information for debugging purposes
     auto Lnorm = get<BoutReal>(state["rho_s0"]);  // Get the length normalization factor from the state
     auto Bnorm = get<BoutReal>(state["Bnorm"]);   // Get the magnetic field normalization factor from the state
 
