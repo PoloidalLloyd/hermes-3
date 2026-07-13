@@ -201,8 +201,8 @@ void Reservoir::transform_impl(GuardedOptions& state) {
           BoutReal Prate  = P[i]  / Nfloor[i] * Nrate_local;
           BoutReal NVrate = NV[i] / Nfloor[i] * Nrate_local;
           density_source_main_sol[i]  += Nrate_local / volume[i];
-          energy_source_main_sol[i]   += (3. / 2) * Prate / volume[i]
-          momentum_source_main_sol[i] += NVrate / volume[i]
+          energy_source_main_sol[i]   += (3. / 2) * Prate / volume[i];
+          momentum_source_main_sol[i] += NVrate / volume[i];
         }
       
         location_main_sol[i] = 1;
